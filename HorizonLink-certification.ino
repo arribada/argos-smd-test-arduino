@@ -34,6 +34,7 @@
             >conf_LDA2L; => Set SMD radio to LDA2L mode
             >conf_VLDA4; => Set SMD radio to VLDA4 mode
             >conf_LDK; => Set SMD radio to LDK mode
+            >conf_SAVE; => Save radio conf
             >ID; => Read SMD ID
             >SN; => Read SMD Serial Number
             >ADDR; => Read SMD Address
@@ -104,6 +105,7 @@ Adafruit_NeoPixel onePixel = Adafruit_NeoPixel(1, 8, NEO_GRB + NEO_KHZ800);
 #define SerialSTM Serial2
 #define PA_PSEL_PIN (10)
 
+
 unsigned int txPeriod = 50000;
 unsigned int nextTx = 50000;
 unsigned int jitterPerc = 10;
@@ -111,6 +113,9 @@ unsigned int jitterPerc = 10;
 String CWParams = "";
 String LPM_Mode = "";
 String TXmessage = "000000000000000000000000000000000000000000000000";
+String TXmessage_LDA2 = "000000000000000000000000000000000000000000000000";
+String TXmessage_LDK = "00000000000000000000000000000000";
+String TXmessage_VLDA4 = "00000000";
 
 unsigned long startComm = 0; //Simple local timer. Calculate time to send message
 unsigned long endComm = 0; //Used to calc the actual update rate.
@@ -126,11 +131,10 @@ BLEBas blebas;    //
 
 #define traceOutput (bleuart)
 
-unsigned long lastConnectedTime = 0;
-const unsigned long BLE_TIMEOUT = 60000; // 1 minute timeout in milliseconds
-bool isBLEActive = true; // Track if BLE is currently active
+bool cmdInProgress = false;
+int charIdx = 0;
 
-char InCmd[20];
+char InCmd[255];
 bool testMode = false;
 
 /**
@@ -247,10 +251,10 @@ void startAdv(void) {
    * For recommended advertising interval
    * https://developer.apple.com/library/content/qa/qa1931/_index.html   
    */
-  Bluefruit.Advertising.restartOnDisconnect(true);
+  Bluefruit.Advertising.restartOnDisconnect(false);
   Bluefruit.Advertising.setInterval(32, 244);  // in unit of 0.625 ms
   Bluefruit.Advertising.setFastTimeout(30);    // number of seconds in fast mode
-  Bluefruit.Advertising.start(0);              // 0 = Don't stop advertising after n seconds
+  Bluefruit.Advertising.start(60);              // 0 = Don't stop advertising after n seconds
 
 
 }
@@ -305,13 +309,12 @@ void loop() {
     
     lastTime = millis(); //Update the timer
   }
-  
+
   // Read from BLEUART or Serial data and interpret CMD
-  int charIdx = 0;
+  
   while (traceOutput.available()) {
     onePixel.setPixelColor(0, 0x00, 0x00, 0xFF);
     onePixel.show();
-    bool cmdInProgress;
 
     uint8_t ch;
     ch = (uint8_t)traceOutput.read();
@@ -325,16 +328,15 @@ void loop() {
       //InCmd[charIdx++] = (char) ch;
     } else if (ch == ';') {
       cmdInProgress = false;
+      charIdx = 0;
       process_cmd(String(InCmd));
+      memset(InCmd, ' ', sizeof(InCmd));
+      InCmd[0] = '\0'; // Mark it as an empty string.
     }
     onePixel.setPixelColor(0, 0, 0xff, 0);
     onePixel.show();
   }
-  if (isBLEActive && !Bluefruit.connected() && (millis() - lastConnectedTime > BLE_TIMEOUT)) {
-    Serial.println("No BLE client connected for 1 minute. Disabling BLE...");
-    Bluefruit.Advertising.stop(); // Stop advertising
-    isBLEActive = false;          // Mark BLE as inactive
-  }
+
 }
 
 /**
@@ -345,9 +347,9 @@ void process_cmd(String cmd) {
   onePixel.setPixelColor(0, 0, 0, 0xff);
   onePixel.show();
 
-  if (cmd == "?;") {
+  if (cmd.startsWith("?;")) {
     print_help();
-  } else if(cmd == "test_mode;") {
+  } else if(cmd.startsWith("test_mode;")) {
     if (testMode == true)
     {
       traceOutput.print("Command : TestMode disabled (no periodic SAT message)");
@@ -356,73 +358,77 @@ void process_cmd(String cmd) {
       traceOutput.print("Command : TestMode enabled (periodic SAT message)");
       testMode = true;
     }
-  } else if (cmd == "pulse;") {
+  } else if (cmd.startsWith("pulse;")) {
     traceOutput.print("Command : pulse cmd received");
     smd_uplink(); 
-  } else if (cmd == "conf;") {
+  } else if (cmd.startsWith("conf;")) {
     traceOutput.print("Command : SMD read configuration");
     smd_conf();    
-  } else if (cmd == "conf_LDA2;") {
+  } else if (cmd.startsWith("conf_LDA2;")) {
     traceOutput.print("Command : SMD Set radio to LDA2");
     smd_conf_LDA2(); 
-  } else if (cmd == "conf_LDA2L;") {
+  } else if (cmd.startsWith("conf_LDA2L;")) {
     traceOutput.print("Command : SMD Set radio to LDA2L");
     smd_conf_LDA2L(); 
-  } else if (cmd == "conf_VLDA4;") {
+  } else if (cmd.startsWith("conf_VLDA4;")) {
     traceOutput.print("Command : SMD Set radio to VLDA4");
     smd_conf_VLDA4(); 
-  } else if (cmd == "conf_LDK;") {
+  } else if (cmd.startsWith("conf_LDK;")) {
     traceOutput.print("Command : smd Set radio to LDK");
     smd_conf_LDK(); 
-  } else if (cmd == "ID;") {
+  } else if (cmd.startsWith("conf_SAVE;")) {
+    traceOutput.print("Command : smd Save radio conf");
+    smd_conf_save(); 
+  } else if (cmd.startsWith("ID;")) {
     traceOutput.print("Command : smd read ID");
     smd_ID();     
-  } else if (cmd == "SN;") {
+  } else if (cmd.startsWith("SN;")) {
     traceOutput.print("Command : smd read Serial Number");
     smd_SN();
-  } else if (cmd == "ADDR;") {
+  } else if (cmd.startsWith("ADDR;")) {
     traceOutput.print("Command : smd read Address");
     smd_ADDR();
-  } else if (cmd == "FW;") {
+  } else if (cmd.startsWith("FW;")) {
     traceOutput.print("Command : smd read firmware version");
     smd_FW(); 
-  } else if (cmd == "AT_VERSION;") {
+  } else if (cmd.startsWith("AT_VERSION;")) {
     traceOutput.print("Command : Read AT version from SMD");
     smd_at_version(); 
-  } else if (cmd == "ping;") {
+  } else if (cmd.startsWith("ping;")) {
     traceOutput.print("Command : smd read Address");
     smd_ping();    
-  } else if (cmd == "read_LPM;") {
+  } else if (cmd.startsWith("read_LPM;")) {
     traceOutput.print("Command : smd read Low power mode");
     smd_read_lpm();    
-  } else if (cmd == "udate;") {
+  } else if (cmd.startsWith("udate;")) {
     traceOutput.print("Command : smd read UTC date");
     smd_udate();  
   }else if (cmd.startsWith("CW=")) {
-    CWParams = cmd.substring(3, cmd.length() - 1); // Extract the message content
+    CWParams = cmd.substring(cmd.indexOf('=') + 1, cmd.indexOf(';')); // Extract the message content
     traceOutput.print("Command : CW forward to SMD ");
     traceOutput.println(CWParams);
     smd_cw();
   }else if (cmd.startsWith("LPM=")) {
-    LPM_Mode = cmd.substring(4, cmd.length() - 1); // Extract the message content
+    LPM_Mode = cmd.substring(cmd.indexOf('=') + 1, cmd.indexOf(';')); // Extract the message content
     traceOutput.print("Command : Set LPM mode ");
     //traceOutput.println(LPM_Mode);
     smd_set_lpm();
   }else if (cmd.startsWith("msg=")) {
-    TXmessage = cmd.substring(4, cmd.length() - 1); // Extract the message content
+    
+    TXmessage = cmd.substring(cmd.indexOf('=')+1, cmd.indexOf(';')); // Extract the message content
     traceOutput.print("Command : Message to forward: ");
     traceOutput.println(TXmessage);
     // Do something with the message here
   }else if (cmd.startsWith("set_period=")) {
     // Extract the new period value from the command
-    String periodStr = cmd.substring(11, cmd.length() - 1);
+    String periodStr = cmd.substring(11, cmd.indexOf(';'));
     txPeriod = periodStr.toInt();
     traceOutput.print("Command : Transmission period set to ");
     traceOutput.print(txPeriod);
     traceOutput.println(" ms");
   } else if (cmd.startsWith("set_jitter=")) {
     // Extract the new jitter percentage value from the command
-    String jitterStr = cmd.substring(11, cmd.length() - 1);
+    String jitterStr = cmd.substring(cmd.indexOf('=') + 1 , cmd.indexOf(';'));
     jitterPerc = jitterStr.toInt();
     traceOutput.print("Command : Jitter percentage set to ");
     traceOutput.print(jitterPerc);
@@ -454,6 +460,7 @@ void smd_FW() {
 void smd_ping() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
+
   String test_cmd = "AT+PING=?";
   traceOutput.print("Ping SMD module");
   traceOutput.print(test_cmd);
@@ -486,7 +493,7 @@ void smd_ADDR() {
 void smd_SN() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  //char test_cmd[] = "AT+TX=00000000";
+
   String test_cmd = "AT+SN=?";
   traceOutput.print("Read smd SN");
   traceOutput.print(test_cmd);
@@ -502,7 +509,7 @@ void smd_SN() {
 void smd_ID() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  //char test_cmd[] = "AT+TX=00000000";
+
   String test_cmd = "AT+ID=?";
   traceOutput.print("Read smd ID");
   traceOutput.print(test_cmd);
@@ -518,7 +525,7 @@ void smd_ID() {
 void smd_conf() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  //char test_cmd[] = "AT+TX=00000000";
+
   String test_cmd = "AT+RCONF=?";
   traceOutput.print("Request read radio configuration");
   traceOutput.print(test_cmd);
@@ -535,10 +542,10 @@ void smd_conf() {
 void smd_conf_LDA2() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  //char test_cmd[] = "AT+TX=00000000";
+  
   String test_cmd = "AT+RCONF=44cd3a299068292a74d2126f3402610d";
   // Set new payload :
-  TXmessage = "000000000000000000000000000000000000000000000000";
+  TXmessage = TXmessage_LDA2;
   traceOutput.print("Change RADIO CONF to LDA2 (27dBm)");
   traceOutput.print(test_cmd);
   startComm = millis();
@@ -553,7 +560,7 @@ void smd_conf_LDA2() {
 void smd_conf_LDA2L() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  TXmessage = "000000000000000000000000000000000000000000000000";
+  TXmessage = TXmessage_LDA2;
   String test_cmd = "AT+RCONF=bd176535b394a665bd86f354c5f424fb";
   traceOutput.print("Change RADIO CONF to LDA2L (27dBm)");
   traceOutput.print(test_cmd);
@@ -569,9 +576,8 @@ void smd_conf_LDA2L() {
 void smd_conf_VLDA4() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  
-  TXmessage = "00000000";
-  
+ 
+  TXmessage = TXmessage_VLDA4;
   String test_cmd = "AT+RCONF=efd2412f8570581457f2d982e76d44d7";
   traceOutput.print("Change RADIO CONF to VLDA4 (22dBm)");
   traceOutput.print(test_cmd);
@@ -589,8 +595,7 @@ void smd_conf_LDK() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
   
-  TXmessage = "000000000000000000000000000000000000000000000000";
-
+  TXmessage = TXmessage_LDK;
   String test_cmd = "AT+RCONF=41bc11b8980df01ba8b4b8f41099620b";
   traceOutput.print("Change RADIO CONF to LDK");
   traceOutput.print(test_cmd);
@@ -609,7 +614,7 @@ void smd_conf_LDK() {
 void smd_conf_save() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  String test_cmd = "AT+SAVE_RCONF=?";
+  String test_cmd = "AT+SAVE_RCONF=";
   traceOutput.print("Save Radio config");
   traceOutput.print(test_cmd);
   startComm = millis();
@@ -779,6 +784,7 @@ void print_help() {
   traceOutput.println("\t - >conf_LDA2L; => Set SMD radio to LDA2L mode");
   traceOutput.println("\t - >conf_VLDA4; => Set SMD radio to VLDA4 mode");
   traceOutput.println("\t - >conf_LDK; => Set SMD radio to LDK mode");
+  traceOutput.println("\t - >conf_SAVE; => Save radio conf");
   traceOutput.println("\t - >ID; => Read SMD ID");
   traceOutput.println("\t - >SN; => Read SMD Serial Number");
   traceOutput.println("\t - >ADDR; => Read SMD Address");
@@ -802,7 +808,7 @@ void print_help() {
 void connect_callback(uint16_t conn_handle) {
   // Get the reference to current connection
   BLEConnection* connection = Bluefruit.Connection(conn_handle);
-  lastConnectedTime = millis();  // Update the last connection time
+
   char central_name[32] = { 0 };
   connection->getPeerName(central_name, sizeof(central_name));
 
@@ -819,7 +825,7 @@ void connect_callback(uint16_t conn_handle) {
 void disconnect_callback(uint16_t conn_handle, uint8_t reason) {
   (void)conn_handle;
   (void)reason;
-  lastConnectedTime = millis();  // Update the timer to start the timeout countdown
+  
   traceOutput.println();
   traceOutput.print("Disconnected, reason = 0x");
   traceOutput.println(reason, HEX);
