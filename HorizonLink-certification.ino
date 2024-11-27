@@ -73,15 +73,15 @@
 #include <variant.h>
 
 #include <bluefruit.h>
-#include <Adafruit_LittleFS.h>
 #include <Adafruit_NeoPixel.h>  //  Library that provides NeoPixel functions
-#include <InternalFileSystem.h>
 #include <SoftwareSerial.h>
 
 #include "Adafruit_TinyUSB.h"
 
+
 //VBAT variables
 //uint32_t vbat_pin = PIN_VBAT;             // A7 for feather nRF52832, A6 for nRF52840
+
 
 #define VBAT_MV_PER_LSB   (0.73242188F)   // 3.0V ADC range and 12-bit ADC resolution = 3000mV/4096
 
@@ -112,10 +112,12 @@ unsigned int jitterPerc = 10;
 //String TXmessage ="FFFFFFFF";
 String CWParams = "";
 String LPM_Mode = "";
+
 String TXmessage = "000000000000000000000000000000000000000000000000";
 String TXmessage_LDA2 = "000000000000000000000000000000000000000000000000";
-String TXmessage_LDK = "00000000000000000000000000000000";
-String TXmessage_VLDA4 = "00000000";
+String TXmessage_LDA2L = "000000000000000000000000000000000000000000000000";
+String TXmessage_LDK = "00000000000000000000000000000000000000";
+String TXmessage_VLDA4 = "000000";
 
 unsigned long startComm = 0; //Simple local timer. Calculate time to send message
 unsigned long endComm = 0; //Used to calc the actual update rate.
@@ -162,6 +164,7 @@ void setup() {
     // Blocking wait for connection when debug mode is enabled via IDE
     while (!Serial) yield();
   #endif
+
 
   // Setup the BLE LED to be enabled on CONNECT
   // Note: This is actually the default behavior, but provided
@@ -255,8 +258,6 @@ void startAdv(void) {
   Bluefruit.Advertising.setInterval(32, 244);  // in unit of 0.625 ms
   Bluefruit.Advertising.setFastTimeout(30);    // number of seconds in fast mode
   Bluefruit.Advertising.start(60);              // 0 = Don't stop advertising after n seconds
-
-
 }
 
 /**
@@ -542,7 +543,6 @@ void smd_conf() {
 void smd_conf_LDA2() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  
   String test_cmd = "AT+RCONF=44cd3a299068292a74d2126f3402610d";
   // Set new payload :
   TXmessage = TXmessage_LDA2;
@@ -576,7 +576,6 @@ void smd_conf_LDA2L() {
 void smd_conf_VLDA4() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
- 
   TXmessage = TXmessage_VLDA4;
   String test_cmd = "AT+RCONF=efd2412f8570581457f2d982e76d44d7";
   traceOutput.print("Change RADIO CONF to VLDA4 (22dBm)");
@@ -594,7 +593,7 @@ void smd_conf_VLDA4() {
 void smd_conf_LDK() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  
+
   TXmessage = TXmessage_LDK;
   String test_cmd = "AT+RCONF=41bc11b8980df01ba8b4b8f41099620b";
   traceOutput.print("Change RADIO CONF to LDK");
@@ -614,6 +613,7 @@ void smd_conf_LDK() {
 void smd_conf_save() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
+
   String test_cmd = "AT+SAVE_RCONF=";
   traceOutput.print("Save Radio config");
   traceOutput.print(test_cmd);
