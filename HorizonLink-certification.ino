@@ -414,6 +414,10 @@ void process_cmd(String cmd) {
     traceOutput.print("Command : Set LPM mode ");
     //traceOutput.println(LPM_Mode);
     smd_set_lpm();
+  }else if (cmd.startsWith("conf_reload")) {
+    traceOutput.print("Command : Reload Radio conf");
+    //traceOutput.println(LPM_Mode);
+    smd_conf_reload();
   }else if (cmd.startsWith("msg=")) {
     
     TXmessage = cmd.substring(cmd.indexOf('=')+1, cmd.indexOf(';')); // Extract the message content
@@ -530,6 +534,28 @@ void smd_conf() {
   String test_cmd = "AT+RCONF=?";
   traceOutput.print("Request read radio configuration");
   traceOutput.print(test_cmd);
+  startComm = millis();
+ 
+  SerialSTM.println(test_cmd);
+  onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
+  onePixel.show();
+}
+
+/**
+ * @brief Sends a request to reload RCONF
+ */
+void smd_conf_reload() {
+  onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
+  onePixel.show();
+
+  String test_cmd = "AT+KMAC=0";
+  traceOutput.print(test_cmd);
+
+  delay(1000);
+
+  test_cmd = "AT+KMAC=1";
+  traceOutput.print(test_cmd);
+
   startComm = millis();
  
   SerialSTM.println(test_cmd);
