@@ -29,27 +29,29 @@ Enter commands via Bluetooth in the following format:
 
 Available commands:
 
-    >?; - Display the help menu
-    >test_mode; - Enable/disable periodic SAT message (default ON)
-    >pulse; - Send Argos test message
-    >msg=Message; - Change the message sent via Argos
-    >set_period=Value; - Set transmission period in milliseconds
-    >set_jitter=Value; - Set jitter percentage for transmissions
-    >conf; - Read SMD configuration
-    >conf_LDA2; - Set SMD radio to LDA2 mode
-    >conf_LDA2L; - Set SMD radio to LDA2L mode
-    >conf_VLDA4; - Set SMD radio to VLDA4 mode
-    >conf_LDK; - Set SMD radio to LDK mode
-    >ID; - Read SMD ID
-    >SN; - Read SMD Serial Number
-    >ADDR; - Read SMD Address
-    >FW; - Read SMD firmware version
-    >AT_VERSION; - Read AT version from SMD
-    >ping; - Ping SMD module
-    >read_LPM; - Read SMD Low Power Mode
-    >udate; - Read UTC date from SMD
-    >CW=Mode,Freq,Power; - Set continuous wave mode
-    >LPM=Mode; - Set Low Power Mode
+            >?; => Display the help menu
+            >test_mode; => Enable/disable periodic SAT message (default ON)
+            >pulse; => Send Argos test message
+            >msg=Message; => Change the message sent via Argos
+            >set_period=Value; => Set transmission period in milliseconds
+            >set_jitter=Value; => Set jitter percentage for transmissions
+            >conf; => Read SMD configuration
+            >conf_LDA2; => Set SMD radio to LDA2 mode
+            >conf_LDA2L; => Set SMD radio to LDA2L mode
+            >conf_VLDA4; => Set SMD radio to VLDA4 mode
+            >conf_LDK; => Set SMD radio to LDK mode
+            >conf_SAVE; => Save radio conf
+            >conf_RELOAD; => Reload the new radio configuration without reset required
+            >ID; => Read SMD ID
+            >SN; => Read SMD Serial Number
+            >ADDR; => Read SMD Address
+            >FW; => Read SMD firmware version
+            >AT_VERSION; => Read AT version from SMD
+            >ping; => Ping SMD module
+            >read_LPM; => Read SMD Low Power Mode
+            >udate; => Read UTC date from SMD
+            >CW=Mode,Freq,Power; => Set continuous wave mode
+            >LPM=Mode; => Set Low Power Mode
 
 # Notes
 
