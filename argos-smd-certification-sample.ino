@@ -4,7 +4,7 @@
  Bluefruit app BLE_UART example
 
  Hardware used:
-    - HorizonLink_FeatherWings + STM32WL SMD module: Arctic communication (Serial)
+    - argos-smd-wings + STM32WL SMD module: Arctic communication (Serial)
     - Feather nRF52840: Main scheduler, Bluetooth, LED control, 
       Serial communication with Wings_Breakout and Wings_GNSS
     
@@ -35,6 +35,7 @@
             >conf_VLDA4; => Set SMD radio to VLDA4 mode
             >conf_LDK; => Set SMD radio to LDK mode
             >conf_SAVE; => Save radio conf
+            >conf_reload; => Reload MAC SMD configuration
             >ID; => Read SMD ID
             >SN; => Read SMD Serial Number
             >ADDR; => Read SMD Address
@@ -45,6 +46,7 @@
             >udate; => Read UTC date from SMD
             >CW=Mode,Freq,Power; => Set continuous wave mode
             >LPM=Mode; => Set Low Power Mode
+            
 
  Note: The USB virtual Serial (Serial) is not used in this example. 
  If you want to replace the BLE app and use only USB communication, 
@@ -55,6 +57,7 @@
  located at:
  {ArduinoPath}\Arduino15\packages\adafruit\hardware\nrf52\1.5.0\variants
  \feather_nrf52840_express\variant.h
+ If you don't want to change it, redefine the correct pin for SerialSMD
 
  #define PIN_SERIAL1_RX       (12)
  #define PIN_SERIAL1_TX       (13)
@@ -67,6 +70,7 @@
  any redistribution.
 *********************************************************************/
 
+/* Include */
 #include <Arduino.h>
 #include <Wire.h>
 #include <Uart.h>
@@ -78,11 +82,7 @@
 
 #include "Adafruit_TinyUSB.h"
 
-
-//VBAT variables
-//uint32_t vbat_pin = PIN_VBAT;             // A7 for feather nRF52832, A6 for nRF52840
-
-
+/* Manage Battery defines and variables */
 #define VBAT_MV_PER_LSB   (0.73242188F)   // 3.0V ADC range and 12-bit ADC resolution = 3000mV/4096
 
 #ifdef NRF52840_XXAA
@@ -94,50 +94,60 @@
 #endif
 
 #define REAL_VBAT_MV_PER_LSB (VBAT_DIVIDER_COMP * VBAT_MV_PER_LSB)
-
+/*********************************************************************/
 
 // -- Create a NeoPixel object called onePixel that addresses 1 pixel in pin 8
 Adafruit_NeoPixel onePixel = Adafruit_NeoPixel(1, 8, NEO_GRB + NEO_KHZ800);
+/*********************************************************************/
 
-// smd variables
+// Manage SMD UART link
 #define STM_UART_RX (PIN_SERIAL2_RX)
 #define STM_UART_TX (PIN_SERIAL2_TX)
 #define SerialSTM Serial2
-#define PA_PSEL_PIN (10)
+#define PA_PSEL_PIN (10) // Depending if it's managed by the SMD (by default yes)
 
-
+// Manage Argos periodic message
 unsigned int txPeriod = 50000;
 unsigned int nextTx = 50000;
 unsigned int jitterPerc = 10;
-//String TXmessage ="FFFFFFFF";
+unsigned long lastTimeTx = 0; //Simple local timer. Limits amount if I2C traffic to u-blox module.
+unsigned long startTimeTx = 0; //Used to calc the actual update rate.
+
+unsigned long startComm = 0; //Simple local timer. Calculate time to send argos message
+unsigned long endComm = 0;   //Used to calc the actual update rate.
+
+
+
+String TXpayload =       "000000000000000000000000000000000000000000000000";
+String TXpayload_LDA2 =  "000000000000000000000000000000000000000000000000";
+String TXpayload_LDA2L = "000000000000000000000000000000000000000000000000";
+String TXpayload_LDK =   "00000000000000000000000000000000000000";
+String TXpayload_VLDA4 = "000000";
+
 String CWParams = "";
 String LPM_Mode = "";
+/*********************************************************************/
 
-String TXmessage = "000000000000000000000000000000000000000000000000";
-String TXmessage_LDA2 = "000000000000000000000000000000000000000000000000";
-String TXmessage_LDA2L = "000000000000000000000000000000000000000000000000";
-String TXmessage_LDK = "00000000000000000000000000000000000000";
-String TXmessage_VLDA4 = "000000";
 
-unsigned long startComm = 0; //Simple local timer. Calculate time to send message
-unsigned long endComm = 0; //Used to calc the actual update rate.
-
-unsigned long lastTime = 0; //Simple local timer. Limits amount if I2C traffic to u-blox module.
-unsigned long startTime = 0; //Used to calc the actual update rate.
 
 // BLE Service
 BLEDfu bledfu;    // OTA DFU service
 BLEDis bledis;    // device information
 BLEUart bleuart;  // uart over ble
 BLEBas blebas;    //
+/*********************************************************************/
 
-#define traceOutput (bleuart)
+// BLE Service
+// change Bleuart to Serial for USB communication, uncomment Serial 
+// initialization in setup()
+#define traceOutput (bleuart) 
 
-bool cmdInProgress = false;
-int charIdx = 0;
 
-char InCmd[255];
-bool testMode = false;
+bool userCmdInProgress = false;
+int userCmdIdx = 0;
+
+char userInCmd[255];
+bool testMode = true;
 
 /**
  * @brief Initializes the hardware and sets up the required peripherals.
@@ -146,7 +156,7 @@ bool testMode = false;
 void setup() {
   // Neopixel init
   onePixel.begin();            // Start the NeoPixel object
-  onePixel.clear();            // Set NeoPixel color to black (0,0,0)
+  onePixel.clear();           // Set NeoPixel color to black (0,0,0)
   onePixel.setBrightness(20);  // Affects all subsequent settings
 
   onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
@@ -187,8 +197,8 @@ void setup() {
 
   // Configure and Start Device Information Service
   bledis.setManufacturer("Arribada Initiative");
-  Bluefruit.setName("HorizonLink_FeatherWings");
-  bledis.setModel("HorizonLink Wings");
+  Bluefruit.setName("argos-smd-wings");
+  bledis.setModel("Argos SMD Wings");
   bledis.begin();
 
   // Configure and Start BLE Uart Service
@@ -225,9 +235,12 @@ void setup() {
   traceOutput.print(nextTx);
 
   // TURN PSEL Pin High
-  pinMode(PA_PSEL_PIN, OUTPUT);
+  pinMode(PA_PSEL_PIN, OUTPUT); // Not necessary, managed by the SMD module
   digitalWrite(PA_PSEL_PIN, HIGH);
-  startTime = millis();
+  startTimeTx = millis();
+  
+  // Since V8.2.1 KMAC profile need to be reload at startup
+  smd_conf_reload();
 }
 
 /**
@@ -294,25 +307,27 @@ void loop() {
     onePixel.show();
   }
 
-  if (millis() - lastTime > nextTx)
+  // Manage periodic message if testMode is enabled
+  if (millis() - lastTimeTx > nextTx)
   {
-    // Send message
-    smd_uplink();
+    if (testMode) {
+      // Send message
+      smd_uplink();
+      
+      // Compute next TX event
+      unsigned int jitterRange = txPeriod * jitterPerc / 100;
     
-    // Compute next TX event
-    unsigned int jitterRange = txPeriod * jitterPerc / 100;
-  
-    // Calculate the next transmission time with jitter
-    nextTx = txPeriod + random(-jitterRange, jitterRange + 1);
-  
-    traceOutput.print("Next TX event (s): ");
-    traceOutput.print(nextTx);
+      // Calculate the next transmission time with jitter
+      nextTx = txPeriod + random(-jitterRange, jitterRange + 1);
     
-    lastTime = millis(); //Update the timer
+      traceOutput.print("Next TX event (s): ");
+      traceOutput.print(nextTx);
+      
+      lastTimeTx = millis(); //Update the timer
+    }
   }
 
   // Read from BLEUART or Serial data and interpret CMD
-  
   while (traceOutput.available()) {
     onePixel.setPixelColor(0, 0x00, 0x00, 0xFF);
     onePixel.show();
@@ -320,19 +335,19 @@ void loop() {
     uint8_t ch;
     ch = (uint8_t)traceOutput.read();
     
-    if (cmdInProgress == true) {
-      InCmd[charIdx++] = (char)ch;
+    if (userCmdInProgress == true) {
+      userInCmd[userCmdIdx++] = (char)ch;
     }
     if (ch == '>') {
-      cmdInProgress = true;
-      charIdx = 0;
-      //InCmd[charIdx++] = (char) ch;
+      userCmdInProgress = true;
+      userCmdIdx = 0;
+      //userInCmd[userCmdIdx++] = (char) ch;
     } else if (ch == ';') {
-      cmdInProgress = false;
-      charIdx = 0;
-      process_cmd(String(InCmd));
-      memset(InCmd, ' ', sizeof(InCmd));
-      InCmd[0] = '\0'; // Mark it as an empty string.
+      userCmdInProgress = false;
+      userCmdIdx = 0;
+      process_cmd(String(userInCmd));
+      memset(userInCmd, ' ', sizeof(userInCmd));
+      userInCmd[0] = '\0'; // Mark it as an empty string.
     }
     onePixel.setPixelColor(0, 0, 0xff, 0);
     onePixel.show();
@@ -367,36 +382,39 @@ void process_cmd(String cmd) {
     smd_conf();    
   } else if (cmd.startsWith("conf_LDA2;")) {
     traceOutput.print("Command : SMD Set radio to LDA2");
-    smd_conf_LDA2(); 
+    smd_conf_set_LDA2(); 
   } else if (cmd.startsWith("conf_LDA2L;")) {
     traceOutput.print("Command : SMD Set radio to LDA2L");
-    smd_conf_LDA2L(); 
+    smd_conf_set_LDA2L(); 
   } else if (cmd.startsWith("conf_VLDA4;")) {
     traceOutput.print("Command : SMD Set radio to VLDA4");
-    smd_conf_VLDA4(); 
+    smd_conf_set_VLDA4(); 
   } else if (cmd.startsWith("conf_LDK;")) {
     traceOutput.print("Command : smd Set radio to LDK");
-    smd_conf_LDK(); 
+    smd_conf_set_LDK(); 
   } else if (cmd.startsWith("conf_SAVE;")) {
     traceOutput.print("Command : smd Save radio conf");
     smd_conf_save(); 
+  }else if (cmd.startsWith("conf_reload;")) {
+    traceOutput.print("Command : Reload Radio conf");
+    smd_conf_reload();
   } else if (cmd.startsWith("ID;")) {
     traceOutput.print("Command : smd read ID");
-    smd_ID();     
+    smd_read_id();     
   } else if (cmd.startsWith("SN;")) {
     traceOutput.print("Command : smd read Serial Number");
-    smd_SN();
+    smd_read_sn();
   } else if (cmd.startsWith("ADDR;")) {
     traceOutput.print("Command : smd read Address");
-    smd_ADDR();
+    smd_read_address();
   } else if (cmd.startsWith("FW;")) {
     traceOutput.print("Command : smd read firmware version");
-    smd_FW(); 
+    smd_read_firmware_version(); 
   } else if (cmd.startsWith("AT_VERSION;")) {
     traceOutput.print("Command : Read AT version from SMD");
-    smd_at_version(); 
+    smd_read_at_version(); 
   } else if (cmd.startsWith("ping;")) {
-    traceOutput.print("Command : smd read Address");
+    traceOutput.print("Command : Ping SMD module ");
     smd_ping();    
   } else if (cmd.startsWith("read_LPM;")) {
     traceOutput.print("Command : smd read Low power mode");
@@ -414,15 +432,11 @@ void process_cmd(String cmd) {
     traceOutput.print("Command : Set LPM mode ");
     //traceOutput.println(LPM_Mode);
     smd_set_lpm();
-  }else if (cmd.startsWith("conf_reload")) {
-    traceOutput.print("Command : Reload Radio conf");
-    //traceOutput.println(LPM_Mode);
-    smd_conf_reload();
   }else if (cmd.startsWith("msg=")) {
     
-    TXmessage = cmd.substring(cmd.indexOf('=')+1, cmd.indexOf(';')); // Extract the message content
+    TXpayload = cmd.substring(cmd.indexOf('=')+1, cmd.indexOf(';')); // Extract the message content
     traceOutput.print("Command : Message to forward: ");
-    traceOutput.println(TXmessage);
+    traceOutput.println(TXpayload);
     // Do something with the message here
   }else if (cmd.startsWith("set_period=")) {
     // Extract the new period value from the command
@@ -442,10 +456,14 @@ void process_cmd(String cmd) {
   onePixel.setPixelColor(0, 0, 0xff, 0);
   onePixel.show();
 }
+
 /**
- * @brief Sends a request to read smd Serial number
+ * @brief Reads the firmware version of the SMD module.
+ * 
+ * This function sends an "AT+FW=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
-void smd_FW() {
+void smd_read_firmware_version() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
   //char test_cmd[] = "AT+TX=00000000";
@@ -453,14 +471,18 @@ void smd_FW() {
   traceOutput.print("Read Firmware version (libkineis)");
   traceOutput.print(test_cmd);
   startComm = millis();
- 
+
   SerialSTM.println(test_cmd);
   onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
   onePixel.show();
 }
 
+
 /**
- * @brief Sends a ping to the SMD module
+ * @brief Sends a ping command to the SMD module to check its responsiveness.
+ * 
+ * This function sends an "AT+PING=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
 void smd_ping() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
@@ -470,15 +492,18 @@ void smd_ping() {
   traceOutput.print("Ping SMD module");
   traceOutput.print(test_cmd);
   startComm = millis();
- 
+
   SerialSTM.println(test_cmd);
   onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
   onePixel.show();
 }
 /**
- * @brief Sends a request to read smd Serial number
+ * @brief Reads the MAC address of the SMD module.
+ * 
+ * This function sends an "AT+ADDR=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
-void smd_ADDR() {
+void smd_read_address() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
   //char test_cmd[] = "AT+TX=00000000";
@@ -493,9 +518,12 @@ void smd_ADDR() {
 }
 
 /**
- * @brief Sends a request to read smd Serial number
+ * @brief Reads the serial number of the SMD module.
+ * 
+ * This function sends an "AT+SN=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
-void smd_SN() {
+void smd_read_sn() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
 
@@ -509,9 +537,12 @@ void smd_SN() {
   onePixel.show();
 }
 /**
- * @brief Sends a request to read smd ID
+ * @brief Reads the unique ID of the SMD module.
+ * 
+ * This function sends an "AT+ID=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
-void smd_ID() {
+void smd_read_id() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
 
@@ -525,7 +556,10 @@ void smd_ID() {
   onePixel.show();
 }
 /**
- * @brief Sends a request to read smd conf
+ * @brief Requests the current radio configuration of the SMD module.
+ * 
+ * This function sends an "AT+RCONF=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
 void smd_conf() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
@@ -542,7 +576,10 @@ void smd_conf() {
 }
 
 /**
- * @brief Sends a request to reload RCONF
+ * @brief Reloads the radio configuration of the SMD module.
+ * 
+ * This function sends two "AT+KMAC" commands to the SMD module to perform a configuration reload.
+ * It also updates the LED color to indicate the operation and logs the commands being sent.
  */
 void smd_conf_reload() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
@@ -551,7 +588,7 @@ void smd_conf_reload() {
   String test_cmd = "AT+KMAC=0";
   traceOutput.print(test_cmd);
 
-  delay(1000);
+  delay(2000);
 
   test_cmd = "AT+KMAC=1";
   traceOutput.print(test_cmd);
@@ -564,14 +601,17 @@ void smd_conf_reload() {
 }
 
 /**
- * @brief Sends a request to configure SMD Radio to LDA2
+ * @brief Changes the radio configuration to LDA2 mode (27dBm).
+ * 
+ * This function sends an "AT+RCONF" command with a specific payload to the SMD module.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
-void smd_conf_LDA2() {
+void smd_conf_set_LDA2() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
   String test_cmd = "AT+RCONF=44cd3a299068292a74d2126f3402610d";
   // Set new payload :
-  TXmessage = TXmessage_LDA2;
+  TXpayload = TXpayload_LDA2;
   traceOutput.print("Change RADIO CONF to LDA2 (27dBm)");
   traceOutput.print(test_cmd);
   startComm = millis();
@@ -580,13 +620,17 @@ void smd_conf_LDA2() {
   onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
   onePixel.show();
 }
+
 /**
-* @brief Sends a request to configure SMD Radio to LDA2L
+ * @brief Changes the radio configuration to LDA2L mode (27dBm).
+ * 
+ * This function sends an "AT+RCONF" command with a specific payload to the SMD module.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
-void smd_conf_LDA2L() {
+void smd_conf_set_LDA2L() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  TXmessage = TXmessage_LDA2;
+  TXpayload = TXpayload_LDA2;
   String test_cmd = "AT+RCONF=bd176535b394a665bd86f354c5f424fb";
   traceOutput.print("Change RADIO CONF to LDA2L (27dBm)");
   traceOutput.print(test_cmd);
@@ -596,13 +640,17 @@ void smd_conf_LDA2L() {
   onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
   onePixel.show();
 }
+
 /**
-* @brief Sends a request to configure SMD Radio to VLDA4
+ * @brief Changes the radio configuration to VLDA4 mode (22dBm).
+ * 
+ * This function sends an "AT+RCONF" command with a specific payload to the SMD module.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
-void smd_conf_VLDA4() {
+void smd_conf_set_VLDA4() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  TXmessage = TXmessage_VLDA4;
+  TXpayload = TXpayload_VLDA4;
   String test_cmd = "AT+RCONF=efd2412f8570581457f2d982e76d44d7";
   traceOutput.print("Change RADIO CONF to VLDA4 (22dBm)");
   traceOutput.print(test_cmd);
@@ -612,15 +660,18 @@ void smd_conf_VLDA4() {
   onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
   onePixel.show();
 }
-  
+ 
 /**
-* @brief Sends a request to configure SMD Radio to LDK
+ * @brief Changes the radio configuration to LDK mode.
+ * 
+ * This function sends an "AT+RCONF" command with a specific payload to the SMD module.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
-void smd_conf_LDK() {
+void smd_conf_set_LDK() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
 
-  TXmessage = TXmessage_LDK;
+  TXpayload = TXpayload_LDK;
   String test_cmd = "AT+RCONF=41bc11b8980df01ba8b4b8f41099620b";
   traceOutput.print("Change RADIO CONF to LDK");
   traceOutput.print(test_cmd);
@@ -632,9 +683,11 @@ void smd_conf_LDK() {
   onePixel.show();
 }
   
-
 /**
- * @brief Sends a request to save radio configuration
+ * @brief Saves the current radio configuration of the SMD module.
+ * 
+ * This function sends an "AT+SAVE_RCONF=" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
 void smd_conf_save() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
@@ -651,13 +704,16 @@ void smd_conf_save() {
 }
   
 /**
- * @brief Sends a test command to the STM32 module for smd testing.
+ * @brief Sends an uplink message with the current payload.
+ * 
+ * This function sends an "AT+TX=" command with the TX payload to the SMD module.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
 void smd_uplink() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
 
-  String test_cmd = "AT+TX=" + TXmessage;
+  String test_cmd = "AT+TX=" + TXpayload;
   traceOutput.print("Send uplink message");
   traceOutput.print(test_cmd);
   startComm = millis();
@@ -666,8 +722,12 @@ void smd_uplink() {
   onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
   onePixel.show();
 }
+
 /**
- * @brief Sends a CW request to SMD
+ * @brief Sends a continuous wave (CW) request to the SMD module.
+ * 
+ * This function sends an "AT+CW=" command with CW parameters to the SMD module.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
 void smd_cw() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
@@ -683,8 +743,12 @@ void smd_cw() {
   onePixel.show();
 }
 
+
 /**
- * @brief Read SMD LPM profile mode
+ * @brief Reads the low-power mode (LPM) status of the SMD module.
+ * 
+ * This function sends an "AT+LPM=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
 void smd_read_lpm() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
@@ -701,7 +765,10 @@ void smd_read_lpm() {
 }
 
 /**
- * @brief Set SMD LPM profile mode
+ * @brief Sets the low-power mode (LPM) of the SMD module.
+ * 
+ * This function sends an "AT+LPM=" command with the desired LPM mode to the SMD module.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
 void smd_set_lpm() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
@@ -718,9 +785,12 @@ void smd_set_lpm() {
 }
 
 /**
- * @brief Read SMD AT Version used
+ * @brief Reads the AT command version from the SMD module.
+ * 
+ * This function sends an "AT+VERSION=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
-void smd_at_version() {
+void smd_read_at_version() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
 
@@ -733,8 +803,12 @@ void smd_at_version() {
   onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
   onePixel.show();
 }
+
 /**
- * @brief Sends a test command to the STM32 module for smd testing.
+ * @brief Requests the UTC date from the SMD module.
+ * 
+ * This function sends an "AT+UDATE=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
  */
 void smd_udate() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
@@ -749,9 +823,14 @@ void smd_udate() {
   onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
   onePixel.show();
 }
-  
+
 /**
- * @brief Read voltage VBAT
+ * @brief Reads the battery voltage from the analog pin.
+ * 
+ * This function configures the ADC to measure the battery voltage, applies necessary
+ * calculations to compensate for the resistor divider, and returns the result in millivolts.
+ * 
+ * @return The battery voltage in millivolts.
  */
 float readVBAT(void) {
   float raw;
@@ -779,8 +858,13 @@ float readVBAT(void) {
 }
 
 /**
- * @brief mv To Percentage
- * @param mvolts millivolt to translate to percentage
+ * @brief Converts a battery voltage in millivolts to a percentage.
+ * 
+ * This function maps the input millivolts to a battery percentage
+ * using predefined thresholds for different voltage ranges.
+ * 
+ * @param mvolts The battery voltage in millivolts.
+ * @return The battery percentage (0-100%).
  */
 uint8_t mvToPercent(float mvolts) {
   if(mvolts<3300)
@@ -794,8 +878,12 @@ uint8_t mvToPercent(float mvolts) {
   mvolts -= 3600;
   return 10 + (mvolts * 0.15F );  // thats mvolts /6.66666666
 }
+
 /**
- * @brief Prints help information for available commands.
+ * @brief Displays a help message with available commands.
+ * 
+ * This function sends a detailed help message over Bluetooth,
+ * explaining the syntax and the list of available commands for the user.
  */
 void print_help() {
   traceOutput.println("Please enter commands via Bluetooth with the following format:");

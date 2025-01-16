@@ -1,10 +1,18 @@
-# HorizonLinks FeatherWings + Argos SMD Module Example
+# Arduino sample code used with Argos SMD wings
 
-This example demonstrates how to use the HorizonLinks FeatherWings with the Argos SMD module connected to an nRF52840 Feather board. It is based on the Bluefruit app BLE_UART example.
+## Overview
+This repository contains the Arduino sample code designed specifically for use with Argos SMD FeatherWings and the Argos SMD module. It is deployed on the nRF52840 Feather board from Adafruit and serves as a robust implementation for interacting with the Argos SMD module.
+
+The code is derived from the Bluefruit BLE_UART example, tailored to seamlessly integrate with the Argos SMD hardware. It demonstrates key functionalities such as configuration, communication, and power management for the Argos module.
+
+This code was successfully used during the certification process with CLS (Collecte Localisation Satellites), ensuring compliance with Argos standards and demonstrating the reliability of the solution. Its compatibility and performance were rigorously tested to meet certification requirements.
+
+Code tested with [argos-smd-at-kineis-firmware](https://github.com/arribada/argos-smd-at-kineis-firmware) version v0.4.
+
 ## Hardware Requirements
 
-- HorizonLink FeatherWings + STM32WL SMD module (for Arctic communication via Serial)
-- Feather nRF52840 (main scheduler, Bluetooth, LED control, and Serial communication with Wings_Breakout and Wings_GNSS)
+- Argos SMD Wings (v1.0) + argos SMD module v1.0 (for Argos communication via Serial)
+- Feather nRF52840 (main scheduler, Bluetooth, LED control, and Serial communication with Argos SMD Wings and Wings_GNSS)
 
 ## Functionality
 
@@ -40,6 +48,7 @@ Available commands:
     >conf_LDA2L; - Set SMD radio to LDA2L mode
     >conf_VLDA4; - Set SMD radio to VLDA4 mode
     >conf_LDK; - Set SMD radio to LDK mode
+    >conf_reload; - Reload the KMAC profile
     >ID; - Read SMD ID
     >SN; - Read SMD Serial Number
     >ADDR; - Read SMD Address
@@ -63,7 +72,8 @@ Available commands:
     #define PIN_SERIAL2_RX       (1)
     #define PIN_SERIAL2_TX       (0)
 ```
+If you don't want to change the variant.h file, please edit the Serial2 pinout.
 
 # License
 
-MIT license, check LICENSE for more information. All text above, and the splash screen below, must be included in any redistribution.
+This project is licensed under the GNU General Public License v3. See the LICENSE file for details.
