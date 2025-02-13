@@ -27,6 +27,12 @@ By default, the program forwards the same LDA2 message every 50 seconds with a j
         Fixed: Connected
 
     3. Go to the UART tab in the app to see the device trace and enter commands.
+	
+Note: If no uplink message is forwarded, try to reload the radio_conf with (`>conf_XXX;` command followed by `>conf_reload`)
+Note: The default CLS credentials are for testing with Emulsat only. Please contact CLS for new credentials if you want to test with a satellite.
+	- ID=123456
+	- ADDR=11223344
+	- SECKEY=00112233445566778899AABBCCDDEEFF
 
 ## Commands
 
@@ -36,7 +42,6 @@ Enter commands via Bluetooth in the following format:
     End with the character ';'
 
 Available commands:
-
     >?; - Display the help menu
     >test_mode; - Enable/disable periodic SAT message (default ON)
     >pulse; - Send Argos test message
@@ -50,8 +55,12 @@ Available commands:
     >conf_LDK; - Set SMD radio to LDK mode
     >conf_reload; - Reload the KMAC profile
     >ID; - Read SMD ID
+	>ID=XXXXXX; Write SMD ID in flash memory
     >SN; - Read SMD Serial Number
     >ADDR; - Read SMD Address
+	>ADDR=XXXXXXXX; - Write HEX address in flash memory
+	>SECKEY; - Read Secret key
+	>SECKEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX; - Write Secrete key in flash memory
     >FW; - Read SMD firmware version
     >AT_VERSION; - Read AT version from SMD
     >ping; - Ping SMD module
@@ -59,6 +68,7 @@ Available commands:
     >udate; - Read UTC date from SMD
     >CW=Mode,Freq,Power; - Set continuous wave mode
     >LPM=Mode; - Set Low Power Mode
+
 
 # Notes
 
@@ -77,3 +87,4 @@ If you don't want to change the variant.h file, please edit the Serial2 pinout.
 # License
 
 This project is licensed under the GNU General Public License v3. See the LICENSE file for details.
+

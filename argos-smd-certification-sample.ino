@@ -36,9 +36,10 @@
             >conf_LDK; => Set SMD radio to LDK mode
             >conf_SAVE; => Save radio conf
             >conf_reload; => Reload MAC SMD configuration
-            >ID; => Read SMD ID
+            >ID; => Read/Set SMD ID
             >SN; => Read SMD Serial Number
-            >ADDR; => Read SMD Address
+            >ADDR; => Read/Set SMD Address
+            >SECKEY; => Read/Set Secret key
             >FW; => Read SMD firmware version
             >AT_VERSION; => Read AT version from SMD
             >ping; => Ping SMD module
@@ -126,6 +127,9 @@ String TXpayload_VLDA4 = "000000";
 
 String CWParams = "";
 String LPM_Mode = "";
+String ID_input = "";
+String ADDR_input = "";
+String SECKEY_input = "";
 /*********************************************************************/
 
 
@@ -401,12 +405,30 @@ void process_cmd(String cmd) {
   } else if (cmd.startsWith("ID;")) {
     traceOutput.print("Command : smd read ID");
     smd_read_id();     
+  } else if (cmd.startsWith("ID=")) {
+    ID_input = cmd.substring(cmd.indexOf('=') + 1, cmd.indexOf(';')); // Extract the message content
+    traceOutput.print("Command : Set ID ");
+    traceOutput.println(ID_input);
+    smd_set_id();
   } else if (cmd.startsWith("SN;")) {
     traceOutput.print("Command : smd read Serial Number");
     smd_read_sn();
   } else if (cmd.startsWith("ADDR;")) {
     traceOutput.print("Command : smd read Address");
     smd_read_address();
+  } else if (cmd.startsWith("ADDR=")) {
+    ADDR_input = cmd.substring(cmd.indexOf('=') + 1, cmd.indexOf(';')); // Extract the message content
+    traceOutput.print("Command : Set ADDR ");
+    traceOutput.println(ADDR_input);
+    smd_set_address();
+  } else if (cmd.startsWith("SECKEY;")) {
+    traceOutput.print("Command : smd Read device secret key");
+    smd_read_seckey();
+  } else if (cmd.startsWith("SECKEY=")) {
+    SECKEY_input = cmd.substring(cmd.indexOf('=') + 1, cmd.indexOf(';')); // Extract the message content
+    traceOutput.print("Command : Set ADDR ");
+    traceOutput.println(ADDR_input);
+    smd_set_seckey();
   } else if (cmd.startsWith("FW;")) {
     traceOutput.print("Command : smd read firmware version");
     smd_read_firmware_version(); 
@@ -518,6 +540,68 @@ void smd_read_address() {
 }
 
 /**
+ * @brief SET the MAC address of the SMD module.
+ * 
+ * This function sends an "AT+ADDR=XXXXXXXX" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
+ */
+void smd_set_address() {
+  onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
+  onePixel.show();
+  
+  String test_cmd = "AT+ADDR=" + ADDR_input;
+  traceOutput.print("Set smd ADDR");
+  traceOutput.print(test_cmd);
+  startComm = millis();
+ 
+ 
+  SerialSTM.println(test_cmd);
+  onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
+  onePixel.show();
+}
+
+/**
+ * @brief Read the secret key
+ * 
+ * This function sends an "AT+SECKEY=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
+ */
+void smd_read_seckey() {
+  onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
+  onePixel.show();
+  //char test_cmd[] = "AT+TX=00000000";
+  String test_cmd = "AT+SECKEY=?";
+  traceOutput.print("Read smd SEC key: ");
+  traceOutput.print(test_cmd);
+  startComm = millis();
+ 
+  SerialSTM.println(test_cmd);
+  onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
+  onePixel.show();
+}
+
+/**
+ * @brief Set the secret key
+ * 
+ * This function sends an "AT+SECKEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
+ */
+void smd_set_seckey() {
+  onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
+  onePixel.show();
+  
+  String test_cmd = "AT+SECKEY=" + SECKEY_input;
+  traceOutput.print("Set smd SECKEY");
+  traceOutput.print(test_cmd);
+  startComm = millis();
+ 
+ 
+  SerialSTM.println(test_cmd);
+  onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
+  onePixel.show();
+}
+
+/**
  * @brief Reads the serial number of the SMD module.
  * 
  * This function sends an "AT+SN=?" command to the SMD module via the SerialSTM interface.
@@ -555,6 +639,26 @@ void smd_read_id() {
   onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
   onePixel.show();
 }
+
+/**
+ * @brief Write the unique ID of the SMD module.
+ * 
+ * This function sends an "AT+ID=XXXXXX" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
+ */
+void smd_set_id() {
+  onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
+  onePixel.show();
+
+  String test_cmd = "AT+ID=" + ID_input;
+  traceOutput.print("Set smd ID");
+  traceOutput.print(test_cmd);
+  startComm = millis();
+ 
+  SerialSTM.println(test_cmd);
+  onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
+  onePixel.show();
+}
 /**
  * @brief Requests the current radio configuration of the SMD module.
  * 
@@ -585,6 +689,7 @@ void smd_conf_reload() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
 
+  delay(1000);
   String test_cmd = "AT+KMAC=0";
   traceOutput.print(test_cmd);
 
@@ -900,8 +1005,12 @@ void print_help() {
   traceOutput.println("\t - >conf_LDK; => Set SMD radio to LDK mode");
   traceOutput.println("\t - >conf_SAVE; => Save radio conf");
   traceOutput.println("\t - >ID; => Read SMD ID");
+  traceOutput.println("\t - >ID=XXXXXX; => Write SMD ID");
   traceOutput.println("\t - >SN; => Read SMD Serial Number");
-  traceOutput.println("\t - >ADDR; => Read SMD Address");
+  traceOutput.println("\t - >ADDR; => Read SMD Address ");
+  traceOutput.println("\t - >ADDR=XXXXXXXX; => Write SMD Address ");
+  traceOutput.println("\t - >SECKEY; => Read Secret key ");
+  traceOutput.println("\t - >SECKEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX; => Write Secret key ");
   traceOutput.println("\t - >FW; => Read SMD firmware version");
   traceOutput.println("\t - >AT_VERSION; => Read AT version from SMD");
   traceOutput.println("\t - >ping; => Ping SMD module");
