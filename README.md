@@ -1,3 +1,4 @@
+![N|Solid](https://arribada.org/wp-content/uploads/2022/01/arribada_web_logo_g.svg)
 # Arduino sample code used with Argos SMD wings
 
 ## Overview
@@ -87,4 +88,3 @@ If you don't want to change the variant.h file, please edit the Serial2 pinout.
 # License
 
 This project is licensed under the GNU General Public License v3. See the LICENSE file for details.
-
