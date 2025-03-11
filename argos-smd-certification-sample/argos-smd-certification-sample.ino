@@ -103,9 +103,9 @@ Adafruit_NeoPixel onePixel = Adafruit_NeoPixel(1, 8, NEO_GRB + NEO_KHZ800);
 /*********************************************************************/
 
 // Manage SMD UART link
-#define STM_UART_RX (PIN_SERIAL2_RX)
-#define STM_UART_TX (PIN_SERIAL2_TX)
-#define SerialSTM Serial2
+#define STM_UART_RX (PIN_SERIAL1_RX)
+#define STM_UART_TX (PIN_SERIAL1_TX)
+#define SerialSTM Serial1
 #define PA_PSEL_PIN (10) // Depending if it's managed by the SMD (by default yes)
 
 // Manage Argos periodic message
@@ -196,7 +196,7 @@ void setup() {
 
   // Configure and Start Device Information Service
   bledis.setManufacturer("Arribada Initiative");
-  Bluefruit.setName("argos-smd-wings");
+  Bluefruit.setName("argos-smd-wings-2");
   bledis.setModel("Argos SMD Wings");
   bledis.begin();
 
@@ -428,7 +428,7 @@ void process_cmd(String cmd) {
     traceOutput.print("Command : smd Read device secret key");
     smd_read_seckey();
   } else if (cmd.startsWith("SECKEY=")) {
-    SECKEY_input = cmd.substring(cmd.indexOf('=') + 1, cmd.indexOf(';')); // Extract the message content
+    String SECKEY_input = cmd.substring(cmd.indexOf('=') + 1, cmd.indexOf(';')); // Extract the message content
     traceOutput.print("Command : Set ADDR ");
     traceOutput.println(SECKEY_input);
     smd_set_seckey(SECKEY_input);
@@ -548,7 +548,7 @@ void smd_read_address() {
  * This function sends an "AT+ADDR=XXXXXXXX" command to the SMD module via the SerialSTM interface.
  * It also updates the LED color to indicate the operation and logs the command being sent.
  */
-void smd_set_address() {
+void smd_set_address(String ADDR_input) {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
   
