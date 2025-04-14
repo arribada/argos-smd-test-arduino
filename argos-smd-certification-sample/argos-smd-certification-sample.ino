@@ -123,7 +123,7 @@ unsigned long endComm = 0;   //Used to calc the actual update rate.
 String TXpayload =       "000000000000000000000000000000000000000000000000";
 String TXpayload_LDA2 =  "000000000000000000000000000000000000000000000000";
 String TXpayload_LDA2L = "000000000000000000000000000000000000000000000000";
-String TXpayload_LDK =   "00000000000000000000000000000000000000";
+String TXpayload_LDK =   "00000000000000000000000000000000";
 String TXpayload_VLDA4 = "000000";
 /*********************************************************************/
 
@@ -757,7 +757,8 @@ void smd_conf_reload() {
 void smd_conf_set_LDA2() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  String test_cmd = "AT+RCONF=44cd3a299068292a74d2126f3402610d";
+  
+  String test_cmd = "AT+RCONF=2c93600d6be3bac0ccfe9047c02c058e";
   // Set new payload :
   TXpayload = TXpayload_LDA2;
   traceOutput.print("Change RADIO CONF to LDA2 (27dBm)");
@@ -820,7 +821,8 @@ void smd_conf_set_LDK() {
   onePixel.show();
 
   TXpayload = TXpayload_LDK;
-  String test_cmd = "AT+RCONF=41bc11b8980df01ba8b4b8f41099620b";
+  	
+  String test_cmd = "AT+RCONF=766843bea66c9461412c9c0d431769d1";
   traceOutput.print("Change RADIO CONF to LDK");
   traceOutput.print(test_cmd);
   startComm = millis();
