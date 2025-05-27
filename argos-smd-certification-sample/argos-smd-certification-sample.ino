@@ -44,6 +44,8 @@
             >FW; => Read SMD firmware version
             >AT_VERSION; => Read AT version from SMD
             >ping; => Ping SMD module
+            >read_MC; => Read Message counter
+            >set_MC; => Set Message counter value
             >read_LPM; => Read SMD Low Power Mode
             >udate; => Read UTC date from SMD
             >CW=Mode,Freq,Power; => Set continuous wave mode
@@ -123,7 +125,7 @@ unsigned long endComm = 0;   //Used to calc the actual update rate.
 String TXpayload =       "000000000000000000000000000000000000000000000000";
 String TXpayload_LDA2 =  "000000000000000000000000000000000000000000000000";
 String TXpayload_LDA2L = "000000000000000000000000000000000000000000000000";
-String TXpayload_LDK =   "00000000000000000000000000000000000000";
+String TXpayload_LDK =   "00000000000000000000000000000000";
 String TXpayload_VLDA4 = "000000";
 /*********************************************************************/
 
@@ -444,6 +446,14 @@ void process_cmd(String cmd) {
   } else if (cmd.startsWith("read_LPM;")) {
     traceOutput.print("Command : smd read Low power mode");
     smd_read_lpm();    
+  } else if (cmd.startsWith("read_MC;")) {
+    traceOutput.print("Command : Read message counter");
+    smd_read_mc();    
+  } else if (cmd.startsWith("set_MC=")) {
+    String MC_input = cmd.substring(cmd.indexOf('=') + 1, cmd.indexOf(';')); // Extract the message content
+    traceOutput.print("Command : Set MC ");
+    traceOutput.println(MC_input);
+    smd_set_mc(MC_input);
   } else if (cmd.startsWith("udate;")) {
     traceOutput.print("Command : smd read UTC date");
     smd_udate();  
@@ -757,7 +767,7 @@ void smd_conf_reload() {
 void smd_conf_set_LDA2() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
-  String test_cmd = "AT+RCONF=44cd3a299068292a74d2126f3402610d";
+  String test_cmd = "AT+RCONF=3d678af16b5a572078f3dbc95a1104e7";
   // Set new payload :
   TXpayload = TXpayload_LDA2;
   traceOutput.print("Change RADIO CONF to LDA2 (27dBm)");
@@ -820,7 +830,7 @@ void smd_conf_set_LDK() {
   onePixel.show();
 
   TXpayload = TXpayload_LDK;
-  String test_cmd = "AT+RCONF=41bc11b8980df01ba8b4b8f41099620b";
+  String test_cmd = "AT+RCONF=03921fb104b92859209b18abd009de96";
   traceOutput.print("Change RADIO CONF to LDK");
   traceOutput.print(test_cmd);
   startComm = millis();
@@ -904,6 +914,47 @@ void smd_read_lpm() {
 
   String test_cmd = "AT+LPM=?";
   traceOutput.print("Send request to read SMD LPM mode");
+  traceOutput.print(test_cmd);
+  startComm = millis();
+ 
+  SerialSTM.println(test_cmd);
+  onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
+  onePixel.show();
+}
+
+
+/**
+ * @brief Reads the message counter of the SMD module.
+ * 
+ * This function sends an "AT+MC=?" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
+ */
+void smd_read_mc() {
+  onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
+  onePixel.show();
+
+  String test_cmd = "AT+MC=?";
+  traceOutput.print("Send request to read SMD Message counter");
+  traceOutput.print(test_cmd);
+  startComm = millis();
+ 
+  SerialSTM.println(test_cmd);
+  onePixel.setPixelColor(0, 0, 0xff, 0);  // Red Green Blue
+  onePixel.show();
+}
+
+/**
+ * @brief Write the new message counter value
+ * 
+ * This function sends an "AT+MC=XXXXXX" command to the SMD module via the SerialSTM interface.
+ * It also updates the LED color to indicate the operation and logs the command being sent.
+ */
+void smd_set_mc(String MC_input) {
+  onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
+  onePixel.show();
+
+  String test_cmd = "AT+MC=" + MC_input;
+  traceOutput.print("Set smd Message counter");
   traceOutput.print(test_cmd);
   startComm = millis();
  
@@ -1060,6 +1111,8 @@ void print_help() {
   traceOutput.println("\t - >AT_VERSION; => Read AT version from SMD");
   traceOutput.println("\t - >ping; => Ping SMD module");
   traceOutput.println("\t - >read_LPM; => Read SMD Low Power Mode");
+  traceOutput.println("\t - >read_MC; => Read SMD Message counter");
+  traceOutput.println("\t - >set_MC=XXXX; => Set message counter value");
   traceOutput.println("\t - >udate; => Read UTC date from SMD");
   traceOutput.println("\t - >CW=Mode,Freq,Power; => Set continuous wave mode (Mode: 0-5, Freq: in Hz, Power: in dBm)");
   traceOutput.println("\t - >LPM=Mode; => Set Low Power Mode (Mode: valid power mode value)");
