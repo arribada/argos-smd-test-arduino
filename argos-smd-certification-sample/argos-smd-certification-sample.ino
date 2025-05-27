@@ -767,6 +767,7 @@ void smd_conf_reload() {
 void smd_conf_set_LDA2() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
+
   String test_cmd = "AT+RCONF=3d678af16b5a572078f3dbc95a1104e7";
   // Set new payload :
   TXpayload = TXpayload_LDA2;
