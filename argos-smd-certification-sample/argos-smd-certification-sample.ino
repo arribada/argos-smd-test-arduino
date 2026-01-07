@@ -148,7 +148,7 @@ bool userCmdInProgress = false;
 int userCmdIdx = 0;
 
 char userInCmd[255];
-bool testMode = true;
+bool testMode = false;
 
 /**
  * @brief Initializes the hardware and sets up the required peripherals.
@@ -742,13 +742,14 @@ void smd_conf_reload() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
 
-  delay(1000);
-  String test_cmd = "AT+KMAC=0";
-  traceOutput.print(test_cmd);
+//  delay(1000);
+  // String test_cmd = "AT+KMAC=0";
+  // traceOutput.print(test_cmd);
+ 
+  // SerialSTM.println(test_cmd);
+  // delay(4000);
 
-  delay(2000);
-
-  test_cmd = "AT+KMAC=1";
+  String test_cmd = "AT+KMAC=1";
   traceOutput.print(test_cmd);
 
   startComm = millis();
@@ -768,7 +769,7 @@ void smd_conf_set_LDA2() {
   onePixel.setPixelColor(0, 255, 0, 255);  // Red = 255, Green = 0, Blue = 255 purple
   onePixel.show();
 
-  String test_cmd = "AT+RCONF=3d678af16b5a572078f3dbc95a1104e7";
+  String test_cmd = "AT+RCONF=2c93600d6be3bac0ccfe9047c02c058e";
   // Set new payload :
   TXpayload = TXpayload_LDA2;
   traceOutput.print("Change RADIO CONF to LDA2 (27dBm)");
